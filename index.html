@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OffersMonkey Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .chat-container {
+            height: calc(100vh - 180px);
+        }
+        .message-bubble {
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .typing-indicator {
+            display: inline-flex;
+            gap: 2px;
+        }
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #90cdf4;
+            animation: typing 1s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.3s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- Header -->
+            <div class="bg-blue-600 p-4">
+                <h1 class="text-white text-2xl font-bold flex items-center">
+                    <i class="bi bi-robot mr-2"></i>
+                    OffersMonkey Assistant
+                </h1>
+            </div>
+
+            <!-- Chat Container -->
+            <div class="chat-container overflow-y-auto p-4" id="chatContainer">
+                <!-- Initial Message -->
+                <div class="flex mb-4">
+                    <div class="bg-blue-100 rounded-lg p-3 message-bubble">
+                        <p>👋 Hi! I'm your OffersMonkey Assistant. I can help you find the best deals and offers. Ask me anything about available offers, stores, or specific deals!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="border-t p-4 bg-gray-50">
+                <div class="flex gap-2">
+                    <input type="text" id="userInput" 
+                           class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:border-blue-500" 
+                           placeholder="Type your question here..."
+                           onkeypress="handleKeyPress(event)">
+                    <button onclick="sendMessage()" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let offersData = [];
+        
+        // Load CSV data
+        async function loadCSVData() {
+            try {
+                const response = await fetch('https://db.zetaverse.one/storage/v1/object/public/app-uploads/spreadsheet-1744284866111/fYBScb7ZPLOQuxszyXjhKpNq9js1/ndryvbh9.csv');
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: true,
+                    complete: function(results) {
+                        offersData = results.data;
+                        console.log('CSV data loaded:', offersData.length, 'records');
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                addMessage('System error loading offers data. Please try again later.', 'assistant');
+            }
+        }
+
+        // Process user query and generate response
+        function processQuery(query) {
+            query = query.toLowerCase();
+            
+            if (query.includes('help') || query.includes('what can you do')) {
+                return "I can help you find offers, compare deals, and provide information about stores. Try asking about specific stores, deals, or types of offers!";
+            }
+
+            if (query.includes('best deals') || query.includes('top offers')) {
+                const featuredOffers = offersData.filter(offer => offer.featured === 'true')
+                    .slice(0, 3)
+                    .map(offer => `- ${offer.title} at ${offer.store} (${offer.offer_value})`).join('\n');
+                return `Here are some featured offers:\n${featuredOffers}`;
+            }
+
+            if (query.includes('store') || query.includes('merchant')) {
+                const storeName = query.split(' ').find(word => 
+                    offersData.some(offer => offer.store.toLowerCase().includes(word))
+                );
+                
+                if (storeName) {
+                    const storeOffers = offersData.filter(offer => 
+                        offer.store.toLowerCase().includes(storeName)
+                    ).slice(0, 3);
+                    
+                    return `Found these offers for ${storeName}:\n` + 
+                           storeOffers.map(offer => `- ${offer.title} (${offer.offer_value})`).join('\n');
+                }
+            }
+
+            return "I couldn't find specific offers matching your query. Try asking about specific stores or browse our featured deals by saying 'show best deals'!";
+        }
+
+        function addMessage(text, sender) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex mb-4 ${sender === 'user' ? 'justify-end' : ''}`;
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.className = `message-bubble ${
+                sender === 'user' 
+                    ? 'bg-blue-600 text-white rounded-lg p-3' 
+                    : 'bg-blue-100 rounded-lg p-3'
+            }`;
+            
+            messageBubble.innerText = text;
+            messageDiv.appendChild(messageBubble);
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const chatContainer = document.getElementById('chatContainer');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'flex mb-4';
+            typingDiv.id = 'typingIndicator';
+            
+            typingDiv.innerHTML = `
+                <div class="bg-blue-100 rounded-lg p-3">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            
+            chatContainer.appendChild(typingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const message = userInput.value.trim();
+            
+            if (message) {
+                addMessage(message, 'user');
+                userInput.value = '';
+                
+                showTypingIndicator();
+                
+                setTimeout(() => {
+                    removeTypingIndicator();
+                    const response = processQuery(message);
+                    addMessage(response, 'assistant');
+                }, 1000);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Initialize
+        loadCSVData();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
